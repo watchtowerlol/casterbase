@@ -4,6 +4,7 @@ casterbase Discord bot  —  RestoreCord / DoubleCounter ID Searcher
 """
 
 import os
+import sys
 import csv
 import io
 import mmap
@@ -13,6 +14,8 @@ from pathlib import Path
 from discord.ext import commands
 from discord import app_commands
 
+print("[casterbase] starting up...", flush=True)
+
 # ─────────────────────────────────────────────
 #  CONFIG
 # ─────────────────────────────────────────────
@@ -21,11 +24,15 @@ RESTORECORD_FOLDER   = str(_HERE / "RestoreCordDatabase")
 DOUBLECOUNTER_FOLDER = str(_HERE / "DoubleCounterDatabase")
 MAX_WORKERS          = 8
 SCAN_EXTENSIONS      = {".txt", ".csv", ".log", ".tsv"}
-BOT_TOKEN            = os.environ["BOT_TOKEN"]
-# ─────────────────────────────────────────────
 
-intents = discord.Intents.default()
-bot     = commands.Bot(command_prefix="!", intents=intents)
+token = os.environ.get("BOT_TOKEN")
+if not token:
+    print("[casterbase] ERROR: BOT_TOKEN env var not set", flush=True)
+    sys.exit(1)
+
+print(f"[casterbase] token loaded, length={len(token)}", flush=True)
+print(f"[casterbase] RestoreCord folder: {RESTORECORD_FOLDER}", flush=True)
+print(f"[casterbase] DoubleCounter folder: {DOUBLECOUNTER_FOLDER}", flush=True)
 
 # ─────────────────────────────────────────────
 #  FILE DISCOVERY
@@ -72,7 +79,7 @@ def read_text(path: Path) -> tuple[list[str], str]:
 def extract_matches(path: Path, target_ids: list[str]) -> list[dict]:
     try:
         lines, encoding = read_text(path)
-    except OSError as e:
+    except OSError:
         return []
 
     matches: list[dict] = []
@@ -114,6 +121,7 @@ def extract_matches(path: Path, target_ids: list[str]) -> list[dict]:
 def search_folder(folder: str, target_ids: list[str]) -> list[dict]:
     needles = [tid.encode() for tid in target_ids]
     files   = find_files(folder)
+    print(f"[casterbase] searching {len(files)} files in {folder}", flush=True)
     all_matches = []
     for path in files:
         hit_needles = mmap_contains_any(path, needles)
@@ -146,7 +154,7 @@ def build_embeds(matches: list[dict], target_ids: list[str],
     for m in matches:
         grouped[m["id"]].append(m)
 
-    color = 0x9B59B6  # purple
+    color = 0x9B59B6
 
     if not matches:
         em = discord.Embed(
@@ -170,7 +178,6 @@ def build_embeds(matches: list[dict], target_ids: list[str],
             embeds.append(em)
             continue
 
-        # one embed per ID, up to 5 matches shown
         em = discord.Embed(
             title=f"✅  {db_label}  —  `{tid}`",
             description=f"**{len(group)}** match{'es' if len(group) != 1 else ''} found",
@@ -190,7 +197,7 @@ def build_embeds(matches: list[dict], target_ids: list[str],
         if len(group) > 5:
             em.add_field(
                 name="...",
-                value=f"*{len(group) - 5} more matches — check results.txt*",
+                value=f"*{len(group) - 5} more matches not shown*",
                 inline=False
             )
         em.set_footer(text=f"⏱  {elapsed:.2f}s  •  {m['format']}")
@@ -199,8 +206,11 @@ def build_embeds(matches: list[dict], target_ids: list[str],
     return embeds
 
 # ─────────────────────────────────────────────
-#  SLASH COMMANDS
+#  BOT SETUP
 # ─────────────────────────────────────────────
+intents = discord.Intents.default()
+bot     = commands.Bot(command_prefix="!", intents=intents)
+
 @bot.tree.command(name="restorecord", description="Search RestoreCord database by user ID(s)")
 @app_commands.describe(ids="One or more IDs separated by commas: 123456 , 789012")
 async def cmd_restorecord(interaction: discord.Interaction, ids: str):
@@ -235,12 +245,10 @@ async def cmd_doublecounter(interaction: discord.Interaction, ids: str):
 async def cmd_ping(interaction: discord.Interaction):
     await interaction.response.send_message(f"🟢  Online  •  `{round(bot.latency * 1000)}ms`")
 
-# ─────────────────────────────────────────────
-#  STARTUP
-# ─────────────────────────────────────────────
 @bot.event
 async def on_ready():
     await bot.tree.sync()
-    print(f"[casterbase]  logged in as {bot.user}  —  commands synced")
+    print(f"[casterbase] logged in as {bot.user} — commands synced", flush=True)
 
-bot.run(BOT_TOKEN)
+print("[casterbase] connecting to Discord...", flush=True)
+bot.run(token)
