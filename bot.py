@@ -248,7 +248,7 @@ async def handle_search(interaction: discord.Interaction,
 #  BOT + SLASH COMMANDS
 # ─────────────────────────────────────────────
 intents = discord.Intents.default()
-bot     = commands.Bot(command_prefix="!", intents=intents)
+bot     = commands.Bot(command_prefix="!", intents=intents, help_command=None)
 
 @bot.tree.command(name="restorecord", description="Search RestoreCord by user ID or username")
 @app_commands.describe(query="ID, username, or multiple separated by commas: 123456 , SomeUser")
